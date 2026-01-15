@@ -1,0 +1,449 @@
+---
+title: "DS Project_2"
+author: "Tania Bobbili"
+date: "2025-11-10"
+output: html_document
+---
+
+## 1. Introduction
+
+Introduction: Introduce the context of your dataset and describe its source(s). Include hyperlink(s) for where you retrieved it from as well as a picture (with citation) related to your topic. Why did you pick this dataset to analyze, and what will you be investigating?
+
+My first dataset provides health information on each US county and my second dataset is a table that I plan to web scrape a table that provides information on the number of those in poverty for each US county. I got the first data set from an organization called [County Health Rankings](https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation/national-data-documentation-2010-2023) and the second dataset comes from the [USDA government website](https://data.ers.usda.gov/reports.aspx?ID=4040). I picked these datasets so that I could explore the different factors around health. I will be investigating the relationship between variables such as obesity, low birthweight rates, poverty, smoking habits in each county, average amount of days spent in poor mental health, and percent of residents in poor health.
+
+![](usa_health.jpg)
+
+## Data Preparation
+
+I obtained my first dataset through a website where I was able to easily download it. However, when I tried to import it, I realized it wasn't a csv file so I went on a website to convert the file. Then, when I tried to import it, the data got messed up so what I ended up doing was going into the Excel file and copying the table into google sheets so that I could then export that into a .csv file. I created 2 new variables because I needed to create categorical variables. I calculated the median of percentage of smokers across all counties and depending on if the value for a county was higher or lower, it would either be a "heavy smoker" county or a "light smoker" county. I did the same thing with obesity rates. For my second dataset, I tried to use html to easily web scrape it but I couldn't get it to work so I manually scraped it into a Google Sheets and then imported it to R. Then. I joined the 2 datasets. Also, when joining the datasets there was a duplicate of each row which was inflating the data so I used join <-distinct(join) in order to make sure each row was unique. After the dataset was joined, I realized that there were some rows that randomly had a missing value in the county column so I got rid of that. There are 3041 observations.
+
+```{r}
+US_COUNTY_HEALTH <- read.csv("US_COUNTY_HEALTH.csv")
+Poverty <- read.csv("Poverty.csv")
+
+library(tidyverse)
+
+county_health <- data.frame()
+
+for (i in 1:nrow(US_COUNTY_HEALTH)) {
+  if (!any(is.na(US_COUNTY_HEALTH[i, ]))) 
+    {
+    county_health <- rbind(county_health, US_COUNTY_HEALTH[i, ])
+  }
+}
+
+median(county_health$perc_smokers)
+median(county_health$obesity)
+  county_health<- as_tibble(county_health) |>
+    rename(perc_smokers = `X..Adults.Reporting.Currently.Smoking`, low_birth = `X..Low.Birthweight`, obesity = `X..Adults.with.Obesity`, poor_health = `X..Fair.or.Poor.Health`, poor_mental = `Average.Number.of.Mentally.Unhealthy.Days`) |>
+  mutate(smoking_habits = if_else(perc_smokers > 20, "Heavy Smokers", "Light Smokers")) |>
+    mutate(obesity_distribution = if_else(obesity >37, "Higher Obesity Area", "Lower Obesity Area"))
+  
+
+
+join <- left_join(county_health, Poverty, by = c("County", "State"))
+join <- distinct(join)
+join <- join[join$County != "" & !is.na(join$County), ]
+
+```
+
+## Variable Descriptions
+
+Variable Descriptions: Create a subset of your “cleaned dataset” (final version after all merging, variable creation, renaming, formatting, etc.) that only includes the variables that you will analyze. Make a nicely formatted table that includes the name of each variable, its type, and a brief description. Remember that you must be analyzing at least 1 numeric variable and 1 categorical variable in your project (see the proposal). Dates, zip codes, latitude, and longitude will not work as numeric variables. 
+
+```{r}
+join <- join |>
+rename(perc_pov = Perc..in.pov)
+
+join$FIPS.x <- NULL
+join$perc_smokers <- NULL
+join$FIPS.y <- NULL
+join$RUC.Code <- NULL
+join$obesity <- NULL
+
+
+library(knitr)
+variable_table <- data.frame(Variable = c("County", "State", "smoking_habits", "low_birth", "obesity_distribution", "poor_health", "perc_pov", "poor_mental"), 
+Type = c("character", "character", "character", "numeric", "character", "numeric", "numeric", "numeric"),
+  Description = c( "Name of the county.", "Name of the state the county belongs to.", "Determines if county has higher percentage of smokers", "Percentage of live births with low birthweight (<2500g).", "Determines if county has a higher amount of obese residents", "Percentage of adults reporting poor health.", "Percentage of population living in poverty.", "Percentage of population with poor mental health"))
+
+kable(variable_table, caption = "Variable Information for County Health Information")
+```
+
+## Univariate Analyses
+# Graph 1
+```{r}
+library(ggplot2)
+univariate = function (variable, color = "chocolate"){
+  variable_plot = ggplot(join)
+
+variable_plot + geom_histogram(aes(x =variable), binwidth = 10, fill = color, col = "black") +   labs( x = paste(variable), y = "Count", title = "Distribution of", variable)
+  
+}
+
+univariate(join$poor_health, "blue")
+
+```
+The distribution is skewed right. The median of percentage in poor health is 
+`r median(join$poor_health)`
+and the average is
+`r round(mean(join$poor_health), digits = 2)`
+.
+
+# Graph 2
+```{r}
+univariate(join$low_birth, "white")
+
+```
+The distribution is skewed right. The median of percentage of low weight births is 
+`r round(median(join$low_birth), digits = 2)`
+and the average is
+`r round(mean(join$low_birth), digits = 2)`
+.
+
+# Graph 3
+```{r}
+univariate(join$poor_mental, "maroon")
+
+```
+The distribution is skewed right. The median of percentage of low weight births is 
+`r median(join$low_birth)`
+and the average is
+`r round(mean(join$low_birth), digits = 2)`
+.
+
+# Graph 4
+```{r}
+univariate(join$perc_pov)
+
+```
+
+The distribution is skewed right. The median of percentage in poverty is 
+`r round(median(join$perc_pov), digits =2)`
+and the average is
+`r round(mean(join$perc_pov), digits = 2)`
+.
+## Multivariate Analyses
+# Graph 1
+Multivariate Analyses: Create at least 4 multivariate (2 or more variables) graphs to display the relationships among your variables of interest.  Provide a brief description of what your plots show, including one or more bivariate descriptive statistics.
+```{r}
+multivariate_num = function (x,y, color = "chocolate"){
+  variable_plot = ggplot(join)
+
+variable_plot + geom_point(aes(x =x, y = y), fill = color, col = "black") +   labs( x = paste(x), y = paste(y), title = paste(x, "vs.", y))
+  
+}
+multivariate_num(join$perc_pov, join$low_birth)
+
+
+
+```
+
+The scatterplot has a right skewed distribution and the general trend is that the more prevelent poverty is in an area, the more likely it is that the county has a higher percentage of low weight at birth. When poverty is above the median, the percentage of babies born with a low birthweight is 
+`r lightweight = join[join$perc_pov > 13.6,]
+round (mean(lightweight$low_birth), digits = 2)`
+and the average amount of poor mental health days for light smokers is 
+`r heavyweight = join[join$perc_pov < 13.6,]
+round (mean(heavyweight$low_birth), digits = 2)`
+.
+
+# Graph 2
+```{r}
+multivariate_num(join$perc_pov, join$poor_mental)
+
+```
+The scatterplot has a right skewed distribution and the general trend is that the more prevelent poverty is in an area, the more likely it is that the county has more residents with poor mental health. When poverty is above the median, the average percentage of residents with poor mental health is
+`r poverty_mental = join[join$perc_pov > 13.6,]
+round (mean(poverty_mental$poor_mental), digits = 2)`
+and when poverty is below the median, the average percentage of residents with poor mental health is
+`r less_pov = join[join$perc_pov < 13.6,]
+round (mean(less_pov$poor_mental), digits = 2)`
+
+# Graph 3
+```{r}
+
+variable_plot <- ggplot(join, aes(x = obesity_distribution, y = poor_health))  + geom_bar(stat = "summary", fun = "mean") + labs(x = "Obesity Distribution", y = "Percent of residents in poor health",title = "Percent of Residents in Poor Physical Health Per Obesity Distribution")
+variable_plot
+
+```
+Higher obesity counties tend to have a higher percentage of residents in poor health compared to the lower obesity counties. The average amount of residents in poor physical health in a high obesity area is
+`r heavy = join[join$obesity_distribution == "Higher Obesity Area",]
+round (mean(heavy$poor_health), digits = 2)`
+and the average amount of residents in poor physical health for a low obesity area is 
+`r light = join[join$obesity_distribution == "Lower Obesity Area",]
+round (mean(light$poor_health), digits = 2)`
+
+# Graph 4
+```{r}
+variable_plot <- ggplot(join, aes(x = smoking_habits, y = poor_mental))  + geom_bar(stat = "summary", fun = "mean") + labs(x = "Smoking habits", y = "Poor mental health days",title = "Average Amount of Poor Mental Health Days Per Smoking Habits")
+variable_plot
+```
+Heavy smoker areas tend to have more poor mental health days on average compared to lower smoking areas. The average amount of poor mental health days for heavy smokers is
+`r heavy_smoke = join[join$smoking_habits == "Heavy Smokers",]
+round (mean(heavy_smoke$poor_mental), digits = 2)`
+and the average amount of poor mental health days for light smokers is 
+`r light_smoke = join[join$smoking_habits == "Light Smokers",]
+round (mean(light_smoke$poor_mental), digits = 2)`
+.
+## Choice elements
+I used inline code in all of my descriptive statistics. I created two new variables by taking numerical variables such as percentage of obesity in counties and percentage of smokers in counties and I turned them into categorical variables by calculating the median and those that were higher than the median were either "higher obesity" or "higher smoking" areas. I also used a for loop and if statement to remove any na values from the first dataset. I joined two datasets together. For the univariate graphs, I created a function with 2 arguments, one argument being the variable and the second being the color of the graph.
+
+## Conclusion
+
+I found that living in poverty consistently contributed to poor health, both in physical health and mental health. Also, smoking led to poor mental health and obesity led to poor physical health. My conclusions were what I expected because a lack of financial stability can be bad for health, as well as obesity and smoking.
+
+## References 
+
+National Data & Documentation: 2010-2023. County Health Rankings & Roadmaps. (2023b). https://www.countyhealthrankings.org/health-data/methodology-and-sources/data-documentation/national-data-documentation-2010-2023 
+
+County-level Data Sets - Poverty. County-level data sets - poverty. (2025). https://data.ers.usda.gov/reports.aspx?ID=4040 
+
+LM, A. (n.d.). The expense of health care explained: What Americans need to know | rand. RAND. https://www.rand.org/pubs/commentary/2024/10/the-expense-of-health-care-explained-what-americans.html 
+
+
+#
+# SDS 313 Shiny App Example - Films with variable choice
+#
+
+library(shiny)
+write.csv(join, "join.csv", row.names = FALSE)
+
+health <- read.csv('join.csv')
+
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+  
+  # Application title
+  titlePanel("Explore How Different Variables of Health Affect Each Other"),
+  
+  # Sidebar with a slider input for number of bins 
+  sidebarLayout(
+    sidebarPanel(
+      
+      #Select box for variable:
+      selectInput("selectvar1", label = h3("Choose the first variable"), 
+                  choices=list("Low Birth Weight"=1, "Percent in Poor Health"=2, "Percent in Poverty"=3, "Percent in Poor Mental Health" = 4), 
+                  selected = 1),
+      
+      selectInput("selectvar2", label = h3("Choose the second variable (optional)"), 
+                  choices=list("Low Birth Weight"=1, "Percent in Poor Health"=2, "Percent in Poverty"=3, "Percent in Poor Mental Health" = 4, "No 2nd Variable" = 5), 
+                  selected = 5),
+      selectInput("state", label = h3("Select a State"),
+                  choices = c("USA", unique(health$State)),
+                  selected = "USA"),
+      checkboxInput("rounder", label = h3("Round Descriptive Statistics?"), value = FALSE)
+      
+      
+    ),
+    
+    # Show a plot of the generated distribution
+    mainPanel(
+      p(strong('This app draws from different health and socioeconomic data points from each US county and is used to visualize that data and the connections between different variables. Choosing the first variable will result in a histogram showing the distribution of the graph and show the mean and standard deviation of the graph. If you also choose a second variable, then the app will make a scatterplot of the two variables and output the correlational coefficient. With the third dropdown, you can select what data you want to be used, either the entire USA or only using data points from a specific state. Lastly, there is a checkbox that if checked, will round the descriptive statistics to 2 decimal points.'),style = "font-family: 'times'; font-si16pt"),
+      plotOutput("distPlot"),
+      hr(),
+      p(strong('Instructions'),style = "font-family: 'times'; font-si16pt"),
+      p('Mean:'),
+      fluidRow(column(5, verbatimTextOutput("mean"))),
+      p('Standard deviation:'),
+      fluidRow(column(5, verbatimTextOutput("sd"))),
+      p('Correlational Coefficient:'),
+      fluidRow(column(5, verbatimTextOutput("cor"))),
+      img(src = "usa_health.jpg", height = "300px"),
+      
+
+    )
+  )
+)
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  filtered <- reactive({
+    if (input$state == "USA") {
+      health
+    } else {
+      subset(health, State == input$state)
+    }
+  })
+  
+  output$distPlot <- renderPlot({
+    
+    if(input$selectvar1 == 1 & input$selectvar2 == 5){
+      hist(filtered()$low_birth, main='Distribution of Low Birth Weight',xlab='Percent of Low Weight Births',col = 'purple', border = 'darkgrey')
+    }
+    
+    if(input$selectvar1 == 2 & input$selectvar2 == 5){
+      hist(filtered()$poor_health, main='Distribution of Poor Health',xlab='Percent in Poor Health',col = 'purple', border = 'darkgrey')
+      
+    }
+    if(input$selectvar1 == 3 & input$selectvar2 == 5){
+      hist(filtered()$perc_pov, main='Distribution of Poverty',xlab='Percent in Poverty',col = 'purple', border = 'darkgrey')
+      
+    }
+    if(input$selectvar1 == 4 & input$selectvar2 == 5){
+      hist(filtered()$poor_mental, main='Distribution of Poor Mental Health',xlab='Amount of Poor Mental Health Days',col = 'purple', border = 'darkgrey')
+      
+    }
+    
+    if(input$selectvar1 == 1 & input$selectvar2 == 2){
+      plot(filtered()$low_birth, filtered()$poor_health, xlab = "Percentage of Low Birth Weights", ylab = "Percentage of those in poor health", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 1 & input$selectvar2 == 3){
+      plot(filtered()$low_birth, filtered()$perc_pov, xlab = "Percentage of Low Birth Weights", ylab = "Percentage of those in poverty", col = "chocolate")
+      
+    }
+    
+    if(input$selectvar1 == 1 & input$selectvar2 == 4){
+      plot(filtered()$low_birth, filtered()$poor_mental, xlab = "Percentage of Low Birth Weights", ylab = "Average amount of poor mental health days", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 2 & input$selectvar2 == 1){
+      plot(filtered()$poor_health, filtered()$low_birth, xlab = "Percentage of those in poor health", ylab = "Percentage of Low Birth Weights", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 2 & input$selectvar2 == 3){
+      plot(filtered()$poor_health, filtered()$perc_pov, xlab = "Percentage of those in poor health", ylab = "Percentage of those in poverty", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 2 & input$selectvar2 == 4){
+      plot(filtered()$poor_health, filtered()$poor_mental, xlab = "Percentage of those in poor health", ylab = "Average amount of poor mental health days", col = "chocolate")
+      
+    }
+    
+    if(input$selectvar1 == 3 & input$selectvar2 == 1){
+      plot(filtered()$perc_pov, filtered()$low_birth, xlab = "Percentage of those in poverty", ylab = "Percentage of Low Birth Weights", col = "chocolate")
+      
+    }
+    
+    if(input$selectvar1 == 3 & input$selectvar2 == 2){
+      plot(filtered()$perc_pov, filtered()$poor_health, xlab = "Percentage of those in poverty", ylab = "Percentage of those in poor health", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 3 & input$selectvar2 == 4){
+      plot(filtered()$perc_pov, filtered()$poor_mental, xlab = "Percentage of those in poverty", ylab = "Average amount of poor mental health days", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 4 & input$selectvar2 == 1){
+      plot(filtered()$poor_mental, filtered()$low_birth, xlab = "Average amount of poor mental health days", ylab = "Percentage of Low Birth Weights", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 4 & input$selectvar2 == 2){
+      plot(filtered()$poor_mental, filtered()$poor_health, xlab = "Average amount of poor mental health days", ylab = "Percentage of those in poor health", col = "chocolate")
+      
+    }
+    if(input$selectvar1 == 4 & input$selectvar2 == 3){
+      plot(filtered()$poor_mental, filtered()$perc_pov, xlab = "Average amount of poor mental health days", ylab = "Percentage of those in poverty", col = "chocolate")
+      
+    }
+  })
+  output$mean <- renderPrint({ 
+    if(input$selectvar1 == 1 & input$selectvar2 == 5 & input$rounder == FALSE){
+      mean(filtered()$low_birth, na.rm=TRUE)}
+    else if(input$selectvar1 == 1 & input$selectvar2 == 5 & input$rounder == TRUE){
+      round(mean(filtered()$low_birth, na.rm=TRUE), digits = 2)}
+    
+    else if(input$selectvar1 == 2 & input$selectvar2 == 5 &input$rounder == FALSE) {
+      mean(filtered()$poor_health, na.rm=TRUE)}
+    else if(input$selectvar1 == 2 & input$selectvar2 == 5 &input$rounder == TRUE) {
+      round(mean(filtered()$poor_health, na.rm=TRUE), digits = 2)}
+    
+    else if(input$selectvar1 == 3 & input$selectvar2 == 5 & input$rounder == FALSE) {
+      mean(filtered()$perc_pov, na.rm=TRUE)}
+    else if(input$selectvar1 == 3 & input$selectvar2 == 5 & input$rounder == TRUE) {
+      round(mean(filtered()$perc_pov, na.rm=TRUE), digits = 2)}
+    
+    else if(input$selectvar1 == 4 & input$selectvar2 == 5 & input$rounder == FALSE) {
+      mean(filtered()$poor_mental, na.rm=TRUE)}
+    else if(input$selectvar1 == 4 & input$selectvar2 == 5 & input$rounder == TRUE) {
+      round(mean(filtered()$poor_mental, na.rm=TRUE), digits = 2)}
+    }
+
+  )
+  output$sd <- renderPrint ({
+    if(input$selectvar1 == 1 & input$selectvar2 == 5 &input$rounder == FALSE){
+      sd(filtered()$low_birth, na.rm=TRUE)}
+    else if(input$selectvar1 == 1 & input$selectvar2 == 5 &input$rounder == TRUE){
+      round(sd(filtered()$low_birth, na.rm=TRUE), digits = 2)}
+    
+    else if(input$selectvar1 == 2 & input$selectvar2 == 5 & input$rounder == FALSE) {
+      sd(filtered()$poor_health, na.rm=TRUE)}
+    else if(input$selectvar1 == 2 & input$selectvar2 == 5 & input$rounder == TRUE) {
+      round(sd(filtered()$poor_health, na.rm=TRUE), digits = 2)}
+    
+    else if(input$selectvar1 == 3 & input$selectvar2 == 5 & input$rounder == FALSE) {
+      sd(filtered()$perc_pov, na.rm=TRUE)}
+    else if(input$selectvar1 == 3 & input$selectvar2 == 5 & input$rounder == TRUE) {
+      round(sd(filtered()$perc_pov, na.rm=TRUE), digits = 2)}
+    
+    else if(input$selectvar1 == 4 & input$selectvar2 == 5 & input$rounder == FALSE) {
+      sd(filtered()$poor_mental, na.rm=TRUE)}
+    else if(input$selectvar1 == 4 & input$selectvar2 == 5 & input$rounder == TRUE) {
+      round(sd(filtered()$poor_mental, na.rm=TRUE), digits = 2)}
+    
+  })
+  output$cor <- renderPrint ({
+    if(input$selectvar1 == 1 & input$selectvar2 == 2 & input$rounder == FALSE){
+      cor(filtered()$low_birth,filtered()$poor_health)}
+    else if(input$selectvar1 == 1 & input$selectvar2 == 2 & input$rounder == TRUE){
+      round(cor(filtered()$low_birth,filtered()$poor_health), digits = 2)}
+    
+    else if(input$selectvar1 == 1 & input$selectvar2 == 3 &input$rounder == FALSE) {
+      cor(filtered()$low_birth, filtered()$perc_pov)}
+    else if(input$selectvar1 == 1 & input$selectvar2 == 3 &input$rounder == TRUE) {
+      round(cor(filtered()$low_birth, filtered()$perc_pov), digits = 2)}
+    
+    else if(input$selectvar1 == 1 & input$selectvar2 == 4 & input$rounder == FALSE) {
+      cor(filtered()$low_birth, filtered()$poor_mental)}
+    else if(input$selectvar1 == 1 & input$selectvar2 == 4 & input$rounder == TRUE) {
+      round(cor(filtered()$low_birth, filtered()$poor_mental), digits = 2)}
+    
+    else if(input$selectvar1 == 2 & input$selectvar2 == 1 & input$rounder == FALSE) {
+      cor(filtered()$poor_health, filtered()$low_birth)}
+    else if(input$selectvar1 == 2 & input$selectvar2 == 1 & input$rounder == TRUE) {
+      round(cor(filtered()$poor_health, filtered()$low_birth), digits = 2)}
+    
+    else if(input$selectvar1 == 2 & input$selectvar2 == 3 & input$rounder == FALSE) {
+      cor(filtered()$poor_health, filtered()$perc_pov)}
+    else if(input$selectvar1 == 2 & input$selectvar2 == 3 & input$rounder == TRUE) {
+      round(cor(filtered()$poor_health, filtered()$perc_pov), digits = 2)}
+    
+    else if(input$selectvar1 == 2 & input$selectvar2 == 4 & input$rounder == FALSE) {
+      cor(filtered()$poor_health, filtered()$poor_mental)}
+    else if(input$selectvar1 == 2 & input$selectvar2 == 4 & input$rounder == TRUE) {
+      round(cor(filtered()$poor_health, filtered()$poor_mental), digits = 2)}
+    
+    else if(input$selectvar1 == 3 & input$selectvar2 == 2 & input$rounder == FALSE) {
+      cor(filtered()$perc_pov, filtered()$poor_health)}
+    else if(input$selectvar1 == 3 & input$selectvar2 == 2 & input$rounder == TRUE) {
+      round(cor(filtered()$perc_pov, filtered()$poor_health), digits = 2)}
+    
+    else if(input$selectvar1 == 3 & input$selectvar2 == 1 & input$rounder == FALSE) {
+      cor(filtered()$perc_pov, filtered()$low_birth)}
+    else if(input$selectvar1 == 3 & input$selectvar2 == 1 & input$rounder == TRUE) {
+      round(cor(filtered()$perc_pov, filtered()$low_birth), digits = 2)}
+    
+    else if(input$selectvar1 == 3 & input$selectvar2 == 4 & input$rounder == FALSE) {
+      cor(filtered()$perc_pov, filtered()$poor_mental)}
+    else if(input$selectvar1 == 3 & input$selectvar2 == 4 & input$rounder == TRUE) {
+      round(cor(filtered()$perc_pov, filtered()$poor_mental), digits = 2)}
+    
+    else if(input$selectvar1 == 4 & input$selectvar2 == 1 & input$rounder == FALSE) {
+      cor(filtered()$poor_mental, filtered()$low_birth)}
+    else if(input$selectvar1 == 4 & input$selectvar2 == 1 & input$rounder == TRUE) {
+      round(cor(filtered()$poor_mental, filtered()$low_birth), digits = 2)}
+    
+    else if(input$selectvar1 == 4 & input$selectvar2 == 2 & input$rounder == FALSE) {
+      cor(filtered()$poor_mental, filtered()$poor_health)}
+    else if(input$selectvar1 == 4 & input$selectvar2 == 2 & input$rounder == TRUE) {
+      round(cor(filtered()$poor_mental, filtered()$poor_health), digits = 2)}
+    
+    else if(input$selectvar1 == 4 & input$selectvar2 == 3 & input$rounder == FALSE) {
+      cor(filtered()$poor_mental, filtered()$perc_pov)}
+    else if(input$selectvar1 == 4 & input$selectvar2 == 3 & input$rounder == TRUE) {
+      round(cor(filtered()$poor_mental, filtered()$perc_pov), digits = 2)}
+  })
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+
