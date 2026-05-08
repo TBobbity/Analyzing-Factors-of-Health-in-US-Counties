@@ -4,4 +4,4 @@ This project investigates relationships between health factors such as obesity, 
 
 ## Dashboard
 
-[View the Dashboard]((https://b2x3qz-tania-bobbili.shinyapps.io/Project3_Tania/))
+[View the Dashboard](https://b2x3qz-tania-bobbili.shinyapps.io/Project3_Tania/)
